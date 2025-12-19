@@ -1,0 +1,566 @@
+{
+  "name": "SC Site verification",
+  "nodes": [
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/edit?gid=0#gid=0",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "SC verify",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/edit#gid=0"
+        },
+        "options": {}
+      },
+      "id": "5a38c77b-daba-4d45-86c1-7f32cf998008",
+      "name": "Read GSheet3",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -5168,
+        6144
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "De03tFAsQcVzGsQY",
+          "name": "SEO - Google sheet"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst verifiedDomains = new Set();\n\n// Helper to check verification status across possible column names\nfunction checkVerified(json) {\n    // Check specific known columns first, then fallback to regex\n    if (json['Verified'] === true || String(json['Verified']).toUpperCase() === 'TRUE') return true;\n    if (json['SC Verified'] === true || String(json['SC Verified']).toUpperCase() === 'TRUE') return true;\n    if (json['verified'] === true || String(json['verified']).toUpperCase() === 'TRUE') return true;\n    \n    // Find any key that looks like \"verified\" or \"sc verified\"\n    const keys = Object.keys(json);\n    const verifiedKey = keys.find(k => k.match(/verified/i));\n    \n    if (verifiedKey) {\n        const val = json[verifiedKey];\n        if (val === true) return true;\n        if (typeof val === 'string') {\n             return val.toUpperCase() === 'TRUE' || val === '1' || val.toUpperCase() === 'YES';\n        }\n        if (typeof val === 'number') {\n            return val === 1;\n        }\n    }\n    return false;\n}\n\n// Pass 1: Collect verified domains to use for subdomain checking\nitems.forEach(item => {\n    const json = item.json;\n    if (json.Domain && checkVerified(json)) {\n        verifiedDomains.add(String(json.Domain).trim().toLowerCase());\n    }\n});\n\n// Pass 2: Determine Action for each row\nreturn items.map((item, index) => {\n    const json = item.json;\n    // Handle empty rows or missing domains gracefully\n    const domain = json.Domain ? String(json.Domain).trim().toLowerCase() : '';\n    \n    // Calculate Row Number (Assuming header is row 1, so index 0 is row 2)\n    const rowNumber = index + 2;\n\n    if (!domain) {\n        return {\n            json: {\n                ...json,\n                flow_action: 'ignore',\n                row_number_calc: rowNumber\n            }\n        };\n    }\n    \n    const txtRequested = json['TXT Requested'] ? String(json['TXT Requested']).trim() : ''; \n    const txtCreated = json['TXT Created'] ? String(json['TXT Created']).trim() : '';\n    const isVerified = checkVerified(json);\n\n    let flow_action = 'ignore';\n\n    if (isVerified) {\n        // Rule: If Verified (Col E) is true, ignore\n        flow_action = 'ignore';\n    } else if (txtCreated === 'TXT Error') {\n        // Rule: If Status (Col D) is 'TXT Error', ignore\n        flow_action = 'ignore';\n    } else if (txtRequested) {\n        // Rule: If TXT Token exists (Col C is not empty)\n        // We never generate a token if one exists.\n        \n        if (txtCreated === 'TXT Created') {\n            // If status is 'TXT Created', we proceed to verify.\n            flow_action = 'verify_site';\n        } else {\n            // Otherwise (e.g. 'TXT Requested' or manual), we wait.\n            flow_action = 'ignore';\n        }\n    } else {\n        // Rule: TXT Token is empty.\n        // We only generate if Status is also empty (clean slate).\n        \n        if (!txtCreated) {\n            // New Domain (C & D empty).\n            // Sub-rule: Check if it is a subdomain of an already verified domain\n            let isSubdomainVerified = false;\n            for (const vDomain of verifiedDomains) {\n                // Check if domain is subdomain (e.g. madrid.example.com ends with .example.com)\n                // Also check equality just in case duplicates exist\n                if (domain.endsWith('.' + vDomain) || domain === vDomain) {\n                    isSubdomainVerified = true;\n                    break;\n                }\n            }\n            \n            if (isSubdomainVerified) {\n                flow_action = 'ignore';\n            } else {\n                flow_action = 'generate_token';\n            }\n        } else {\n            // C is empty but D has something? Inconsistent state or 'TXT Created' without token (weird). \n            // Better to ignore to be safe.\n            flow_action = 'ignore';\n        }\n    }\n    \n    // Safety Condition: Only generate tokens for rows >= 1106\n    if (flow_action === 'generate_token' && rowNumber < 1106) {\n        flow_action = 'ignore';\n    }\n    \n    return {\n        json: {\n            ...json,\n            flow_action: String(flow_action), // Explicitly cast to string to prevent type errors\n            row_number_calc: rowNumber\n        }\n    };\n});"
+      },
+      "name": "Filtering Logic3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4944,
+        6144
+      ],
+      "id": "bd8eef28-da22-476b-8464-5fd40c7b0fc5"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/edit?gid=0#gid=0",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "SC verify",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Domain": "={{ $('Router3').item.json.Domain }}",
+            "TXT DNS Record ": "={{ $json.token }}",
+            "Status": "TXT Requested"
+          },
+          "matchingColumns": [
+            "Domain"
+          ],
+          "schema": [
+            {
+              "id": "Domain",
+              "displayName": "Domain",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Type",
+              "displayName": "Type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "TXT DNS Record ",
+              "displayName": "TXT DNS Record ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Verified SC?",
+              "displayName": "Verified SC?",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "API property",
+              "displayName": "API property",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "API connector",
+              "displayName": "API connector",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Analytics ID",
+              "displayName": "Analytics ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "View_id",
+              "displayName": "View_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Domain Name",
+              "displayName": "Domain Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Date Created",
+              "displayName": "Date Created",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Property_id",
+              "displayName": "Property_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Biq Query Dataset Name",
+              "displayName": "Biq Query Dataset Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Big Query Connected",
+              "displayName": "Big Query Connected",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Owner",
+              "displayName": "Owner",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "name": "Sheet: Write Token3",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -4272,
+        6048
+      ],
+      "id": "92caea90-f8b1-4b85-ad8b-fb8ff45b6fb4",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "De03tFAsQcVzGsQY",
+          "name": "SEO - Google sheet"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.flow_action }}",
+                    "rightValue": "generate_token",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "4aa3989d-e773-48aa-a5b1-e6f15c46431e"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.flow_action }}",
+                    "rightValue": "verify_site",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "52115b10-972c-4367-b58a-f06527c68a85"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.flow_action }}",
+                    "rightValue": "ignore",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "a997cc44-4e90-4e05-8cab-75b2904a89bf"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Router3",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        -4720,
+        6128
+      ],
+      "id": "f75241de-cdaa-4dec-8720-5c744aa600a5"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/siteVerification/v1/token",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "verificationMethod",
+              "value": "DNS_TXT"
+            },
+            {
+              "name": "site.identifier",
+              "value": "={{ $json.Domain }}"
+            },
+            {
+              "name": "site.type",
+              "value": "INET_DOMAIN"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "API: Get Token3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -4496,
+        6048
+      ],
+      "id": "40af9c71-7867-4e96-a964-33114eabe59d",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "3x3nyVCVCCpkE0Lf",
+          "name": "SEO - SC Site Verification"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/siteVerification/v1/webResource?verificationMethod=DNS_TXT",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "site.identifier",
+              "value": "={{ $json.Domain }}"
+            },
+            {
+              "name": "site.type",
+              "value": "INET_DOMAIN"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "API: Verify Site3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -4496,
+        6240
+      ],
+      "id": "828ef2c5-426e-401f-aa8e-c816f2041c19"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/edit?gid=0#gid=0"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "SC verify",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Verified": "TRUE"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Verified",
+              "displayName": "Verified",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false
+            }
+          ]
+        },
+        "options": {
+          "rowNum": "={{ parseInt($json.row_number_calc) }}"
+        }
+      },
+      "name": "Sheet: Mark Verified3",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -4272,
+        6240
+      ],
+      "id": "958109c5-6958-4d2b-8845-f5aad3d68f8e",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "De03tFAsQcVzGsQY",
+          "name": "SEO - Google sheet"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -5424,
+        6144
+      ],
+      "id": "28c5691f-6bca-449c-94ef-4b005729be4f",
+      "name": "When clicking ‘Execute workflow’"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook3": {
+      "main": [
+        [
+          {
+            "node": "Read GSheet3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read GSheet3": {
+      "main": [
+        [
+          {
+            "node": "Filtering Logic3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtering Logic3": {
+      "main": [
+        [
+          {
+            "node": "Router3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Router3": {
+      "main": [
+        [
+          {
+            "node": "API: Get Token3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "API: Verify Site3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: Get Token3": {
+      "main": [
+        [
+          {
+            "node": "Sheet: Write Token3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: Verify Site3": {
+      "main": [
+        [
+          {
+            "node": "Sheet: Mark Verified3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Read GSheet3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  },
+  "versionId": "d9b062da-ea35-4104-94e3-7c4446177e37",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "08a17d2ffdb586b840ec52dedb22b9c39b7a4b965cbde88862926fcc30465257"
+  },
+  "id": "BSaO0p7YLRqRKDxS",
+  "tags": []
+}
