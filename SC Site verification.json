@@ -2,28 +2,39 @@
   "name": "SC Site verification",
   "nodes": [
     {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1280,
+        960
+      ],
+      "id": "17ad9718-db70-45a1-82a1-86d444f6af4e",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
       "parameters": {
         "documentId": {
           "__rl": true,
-          "value": "https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/edit?gid=0#gid=0",
+          "value": "https://docs.google.com/spreadsheets/d/1spIp3sKzMTNowJojfMFbL6b3BUv3VLrys0jLESLbrFc",
           "mode": "url"
         },
         "sheetName": {
           "__rl": true,
-          "value": "gid=0",
+          "value": 938773327,
           "mode": "list",
           "cachedResultName": "SC verify",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/edit#gid=0"
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1spIp3sKzMTNowJojfMFbL6b3BUv3VLrys0jLESLbrFc/edit#gid=938773327"
         },
         "options": {}
       },
-      "id": "5a38c77b-daba-4d45-86c1-7f32cf998008",
+      "id": "a299417e-fb06-4fff-a70f-14358b4b4841",
       "name": "Read GSheet3",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        -5168,
-        6144
+        -992,
+        960
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
@@ -34,31 +45,31 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst verifiedDomains = new Set();\n\n// Helper to check verification status across possible column names\nfunction checkVerified(json) {\n    // Check specific known columns first, then fallback to regex\n    if (json['Verified'] === true || String(json['Verified']).toUpperCase() === 'TRUE') return true;\n    if (json['SC Verified'] === true || String(json['SC Verified']).toUpperCase() === 'TRUE') return true;\n    if (json['verified'] === true || String(json['verified']).toUpperCase() === 'TRUE') return true;\n    \n    // Find any key that looks like \"verified\" or \"sc verified\"\n    const keys = Object.keys(json);\n    const verifiedKey = keys.find(k => k.match(/verified/i));\n    \n    if (verifiedKey) {\n        const val = json[verifiedKey];\n        if (val === true) return true;\n        if (typeof val === 'string') {\n             return val.toUpperCase() === 'TRUE' || val === '1' || val.toUpperCase() === 'YES';\n        }\n        if (typeof val === 'number') {\n            return val === 1;\n        }\n    }\n    return false;\n}\n\n// Pass 1: Collect verified domains to use for subdomain checking\nitems.forEach(item => {\n    const json = item.json;\n    if (json.Domain && checkVerified(json)) {\n        verifiedDomains.add(String(json.Domain).trim().toLowerCase());\n    }\n});\n\n// Pass 2: Determine Action for each row\nreturn items.map((item, index) => {\n    const json = item.json;\n    // Handle empty rows or missing domains gracefully\n    const domain = json.Domain ? String(json.Domain).trim().toLowerCase() : '';\n    \n    // Calculate Row Number (Assuming header is row 1, so index 0 is row 2)\n    const rowNumber = index + 2;\n\n    if (!domain) {\n        return {\n            json: {\n                ...json,\n                flow_action: 'ignore',\n                row_number_calc: rowNumber\n            }\n        };\n    }\n    \n    const txtRequested = json['TXT Requested'] ? String(json['TXT Requested']).trim() : ''; \n    const txtCreated = json['TXT Created'] ? String(json['TXT Created']).trim() : '';\n    const isVerified = checkVerified(json);\n\n    let flow_action = 'ignore';\n\n    if (isVerified) {\n        // Rule: If Verified (Col E) is true, ignore\n        flow_action = 'ignore';\n    } else if (txtCreated === 'TXT Error') {\n        // Rule: If Status (Col D) is 'TXT Error', ignore\n        flow_action = 'ignore';\n    } else if (txtRequested) {\n        // Rule: If TXT Token exists (Col C is not empty)\n        // We never generate a token if one exists.\n        \n        if (txtCreated === 'TXT Created') {\n            // If status is 'TXT Created', we proceed to verify.\n            flow_action = 'verify_site';\n        } else {\n            // Otherwise (e.g. 'TXT Requested' or manual), we wait.\n            flow_action = 'ignore';\n        }\n    } else {\n        // Rule: TXT Token is empty.\n        // We only generate if Status is also empty (clean slate).\n        \n        if (!txtCreated) {\n            // New Domain (C & D empty).\n            // Sub-rule: Check if it is a subdomain of an already verified domain\n            let isSubdomainVerified = false;\n            for (const vDomain of verifiedDomains) {\n                // Check if domain is subdomain (e.g. madrid.example.com ends with .example.com)\n                // Also check equality just in case duplicates exist\n                if (domain.endsWith('.' + vDomain) || domain === vDomain) {\n                    isSubdomainVerified = true;\n                    break;\n                }\n            }\n            \n            if (isSubdomainVerified) {\n                flow_action = 'ignore';\n            } else {\n                flow_action = 'generate_token';\n            }\n        } else {\n            // C is empty but D has something? Inconsistent state or 'TXT Created' without token (weird). \n            // Better to ignore to be safe.\n            flow_action = 'ignore';\n        }\n    }\n    \n    // Safety Condition: Only generate tokens for rows >= 1106\n    if (flow_action === 'generate_token' && rowNumber < 1106) {\n        flow_action = 'ignore';\n    }\n    \n    return {\n        json: {\n            ...json,\n            flow_action: String(flow_action), // Explicitly cast to string to prevent type errors\n            row_number_calc: rowNumber\n        }\n    };\n});"
+        "jsCode": "const items = $input.all();\nconst verifiedDomains = new Set();\n\n// Helper to check verification status across possible column names\nfunction checkVerified(json) {\n    // Check specific known columns first, then fallback to regex\n    if (json['Verified SC?'] === true || String(json['Verified SC?']).toUpperCase() === 'TRUE') return true;\n    if (json['Verified'] === true || String(json['Verified']).toUpperCase() === 'TRUE') return true;\n    if (json['SC Verified'] === true || String(json['SC Verified']).toUpperCase() === 'TRUE') return true;\n    if (json['verified'] === true || String(json['verified']).toUpperCase() === 'TRUE') return true;\n    \n    // Find any key that looks like \"verified\" or \"sc verified\"\n    const keys = Object.keys(json);\n    const verifiedKey = keys.find(k => k.match(/verified/i));\n    \n    if (verifiedKey) {\n        const val = json[verifiedKey];\n        if (val === true) return true;\n        if (typeof val === 'string') {\n             return val.toUpperCase() === 'TRUE' || val === '1' || val.toUpperCase() === 'YES';\n        }\n        if (typeof val === 'number') {\n            return val === 1;\n        }\n    }\n    return false;\n}\n\n// Pass 1: Collect verified domains to use for subdomain checking\nitems.forEach(item => {\n    const json = item.json;\n    if (json.Domain && checkVerified(json)) {\n        verifiedDomains.add(String(json.Domain).trim().toLowerCase());\n    }\n});\n\n// Pass 2: Determine Action for each row\nreturn items.map((item, index) => {\n    const json = item.json;\n    // Handle empty rows or missing domains gracefully\n    const domain = json.Domain ? String(json.Domain).trim().toLowerCase() : '';\n    \n    // Calculate Row Number (Assuming header is row 1, so index 0 is row 2)\n    const rowNumber = index + 2;\n\n    if (!domain) {\n        return {\n            json: {\n                ...json,\n                flow_action: 'ignore',\n                row_number_calc: rowNumber\n            }\n        };\n    }\n    \n    // FIX: Get Status from the correct column\n    // We check 'Status', then '0' (seen in screenshot), then lowercase 'status'\n    let status = '';\n    if (json['Status']) status = String(json['Status']).trim();\n    else if (json['0']) status = String(json['0']).trim();\n    else if (json['status']) status = String(json['status']).trim();\n\n    // Check for existing token (Column C)\n    // JSON mapping has space at end, header might not. Check both.\n    const txtRecord = json['TXT DNS Record'] || json['TXT DNS Record '];\n    const hasToken = !!(txtRecord && String(txtRecord).trim());\n    \n    const isVerified = checkVerified(json);\n\n    let flow_action = 'ignore';\n\n    if (isVerified) {\n        flow_action = 'ignore';\n    } else if (status === 'TXT Error' || status === 'TXT Requested') {\n        flow_action = 'ignore';\n    } else if (hasToken) {\n        // If we have a token, we check status to see if we should verify\n        if (status === 'TXT Created') {\n            flow_action = 'verify_site';\n        } else {\n            // Token exists but not ready to verify (e.g. 'TXT Requested' or manual)\n            flow_action = 'ignore';\n        }\n    } else {\n        // No token. \n        // Only generate if status is empty (clean slate)\n        if (!status) {\n            // New Domain (C & D empty).\n            // Sub-rule: Check if it is a subdomain of an already verified domain\n            let isSubdomainVerified = false;\n            for (const vDomain of verifiedDomains) {\n                if (domain.endsWith('.' + vDomain) || domain === vDomain) {\n                    isSubdomainVerified = true;\n                    break;\n                }\n            }\n            \n            if (isSubdomainVerified) {\n                flow_action = 'ignore';\n            } else {\n                flow_action = 'generate_token';\n            }\n        } else {\n            // Status has something but no token? \n            flow_action = 'ignore';\n        }\n    }\n    \n    // Safety Condition: Only generate tokens for rows >= 1106\n    if ((flow_action === 'generate_token' || flow_action === 'verify_site') && rowNumber < 1106) {\n        flow_action = 'ignore';\n    }\n    \n    return {\n        json: {\n            ...json,\n            flow_action: String(flow_action), \n            row_number_calc: rowNumber\n        }\n    };\n});"
       },
       "name": "Filtering Logic3",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -4944,
-        6144
+        -768,
+        960
       ],
-      "id": "bd8eef28-da22-476b-8464-5fd40c7b0fc5"
+      "id": "4b600584-94f6-40de-9478-d966ecdceeef"
     },
     {
       "parameters": {
         "operation": "update",
         "documentId": {
           "__rl": true,
-          "value": "https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/edit?gid=0#gid=0",
+          "value": "https://docs.google.com/spreadsheets/d/1spIp3sKzMTNowJojfMFbL6b3BUv3VLrys0jLESLbrFc",
           "mode": "url"
         },
         "sheetName": {
           "__rl": true,
-          "value": "gid=0",
+          "value": 938773327,
           "mode": "list",
           "cachedResultName": "SC verify",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/edit#gid=0"
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1spIp3sKzMTNowJojfMFbL6b3BUv3VLrys0jLESLbrFc/edit#gid=938773327"
         },
         "columns": {
           "mappingMode": "defineBelow",
@@ -237,10 +248,10 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        -4272,
-        6048
+        -96,
+        864
       ],
-      "id": "92caea90-f8b1-4b85-ad8b-fb8ff45b6fb4",
+      "id": "54967c8d-d684-43ea-a7fe-08b9177ac313",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "De03tFAsQcVzGsQY",
@@ -326,10 +337,10 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
       "position": [
-        -4720,
-        6128
+        -544,
+        944
       ],
-      "id": "f75241de-cdaa-4dec-8720-5c744aa600a5"
+      "id": "326dc01d-9ffc-4c14-87e4-e3b7b4e0f377"
     },
     {
       "parameters": {
@@ -360,10 +371,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        -4496,
-        6048
+        -320,
+        864
       ],
-      "id": "40af9c71-7867-4e96-a964-33114eabe59d",
+      "id": "3a0e6a52-987e-43f5-b81f-8dff6afbe634",
       "credentials": {
         "googleOAuth2Api": {
           "id": "3x3nyVCVCCpkE0Lf",
@@ -396,10 +407,45 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        -4496,
-        6240
+        -320,
+        1056
       ],
-      "id": "828ef2c5-426e-401f-aa8e-c816f2041c19"
+      "id": "115e9be1-76ad-4655-891c-52c5fdf1f87a",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "3x3nyVCVCCpkE0Lf",
+          "name": "SEO - SC Site Verification"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ \"https://www.googleapis.com/webmasters/v3/sites/sc-domain:\" + $('Router3').item.json.Domain }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "name": "API: Add to GSC",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -144,
+        1056
+      ],
+      "id": "39d70790-3c7c-4eef-a52d-7e4a812076b2",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "5g0ppmHyHO8p2RyJ",
+          "name": "SEO - SC API [WRITE]"
+        }
+      }
     },
     {
       "parameters": {
@@ -407,43 +453,231 @@
         "documentId": {
           "__rl": true,
           "mode": "url",
-          "value": "https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/edit?gid=0#gid=0"
+          "value": "https://docs.google.com/spreadsheets/d/1spIp3sKzMTNowJojfMFbL6b3BUv3VLrys0jLESLbrFc/edit?gid=0#gid=0"
         },
         "sheetName": {
           "__rl": true,
-          "value": "gid=0",
+          "value": "SC verify",
           "mode": "list",
           "cachedResultName": "SC verify",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/edit#gid=0"
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1spIp3sKzMTNowJojfMFbL6b3BUv3VLrys0jLESLbrFc/edit#gid=0"
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "Verified": "TRUE"
+            "row_number": 0,
+            "Domain": "={{ $('API: Verify Site3').item.json.site.identifier }}",
+            "Verified SC?": "TRUE"
           },
-          "matchingColumns": [],
+          "matchingColumns": [
+            "Domain"
+          ],
           "schema": [
             {
-              "id": "Verified",
-              "displayName": "Verified",
+              "id": "Domain",
+              "displayName": "Domain",
               "required": false,
               "defaultMatch": false,
-              "canBeUsedToMatch": false
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Type",
+              "displayName": "Type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "TXT DNS Record ",
+              "displayName": "TXT DNS Record ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Verified SC?",
+              "displayName": "Verified SC?",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "API property",
+              "displayName": "API property",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "API connector",
+              "displayName": "API connector",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Analytics ID",
+              "displayName": "Analytics ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "View_id",
+              "displayName": "View_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Domain Name",
+              "displayName": "Domain Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Date Created",
+              "displayName": "Date Created",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Property_id",
+              "displayName": "Property_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Biq Query Dataset Name",
+              "displayName": "Biq Query Dataset Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Big Query Connected",
+              "displayName": "Big Query Connected",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Owner",
+              "displayName": "Owner",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "method",
+              "displayName": "method",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "token",
+              "displayName": "token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
             }
-          ]
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
         },
-        "options": {
-          "rowNum": "={{ parseInt($json.row_number_calc) }}"
-        }
+        "options": {}
       },
       "name": "Sheet: Mark Verified3",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        -4272,
-        6240
+        48,
+        1056
       ],
-      "id": "958109c5-6958-4d2b-8845-f5aad3d68f8e",
+      "id": "540df8db-5327-4717-9dfc-cf98d30e157b",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "De03tFAsQcVzGsQY",
@@ -452,20 +686,62 @@
       }
     },
     {
-      "parameters": {},
-      "type": "n8n-nodes-base.manualTrigger",
-      "typeVersion": 1,
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0A532BGEQJ",
+          "mode": "id"
+        },
+        "text": "={{ \"🚀 *Nueva Solicitud de Verificación*\\n\\n🌐 *Dominio:* \" + $('Router3').item.json.Domain + \"\\n📝 *Estado:* TXT Requested (Token generado)\\n⏳ *Acción:* Añadir registro TXT al DNS y esperar propagación.\" }}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
       "position": [
-        -5424,
-        6144
+        112,
+        864
       ],
-      "id": "28c5691f-6bca-449c-94ef-4b005729be4f",
-      "name": "When clicking ‘Execute workflow’"
+      "id": "8b713ce3-bb0d-4448-abc9-2e89eedeb642",
+      "name": "Slack: Token Generated",
+      "webhookId": "29807620-4e35-4120-8a38-083eb4db8466",
+      "credentials": {
+        "slackApi": {
+          "id": "pm4aWiFcFad05UGN",
+          "name": "SEO -  Slack SEO Agent"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0A532BGEQJ",
+          "mode": "id"
+        },
+        "text": "={{ \"✅ *¡Dominio Verificado!*\\n\\n🌐 *Dominio:* \" + $('Router3').item.json.Domain + \"\\n📊 *Estado:* Añadido a Search Console\\n👉 *Siguiente paso:* Go now and configure BQ connection\" }}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        256,
+        1056
+      ],
+      "id": "slack-site-verified",
+      "name": "Slack: Site Verified",
+      "credentials": {
+        "slackApi": {
+          "id": "pm4aWiFcFad05UGN",
+          "name": "SEO -  Slack SEO Agent"
+        }
+      }
     }
   ],
   "pinData": {},
   "connections": {
-    "Webhook3": {
+    "When clicking ‘Execute workflow’": {
       "main": [
         [
           {
@@ -531,6 +807,17 @@
       "main": [
         [
           {
+            "node": "API: Add to GSC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: Add to GSC": {
+      "main": [
+        [
+          {
             "node": "Sheet: Mark Verified3",
             "type": "main",
             "index": 0
@@ -538,11 +825,33 @@
         ]
       ]
     },
-    "When clicking ‘Execute workflow’": {
+    "Sheet: Mark Verified3": {
       "main": [
         [
           {
-            "node": "Read GSheet3",
+            "node": "Slack: Site Verified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sheet: Write Token3": {
+      "main": [
+        [
+          {
+            "node": "Slack: Token Generated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sheet: Write Token3": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
             "type": "main",
             "index": 0
           }
@@ -550,13 +859,13 @@
       ]
     }
   },
-  "active": true,
+  "active": false,
   "settings": {
     "executionOrder": "v1",
     "callerPolicy": "workflowsFromSameOwner",
-    "availableInMCP": true
+    "availableInMCP": false
   },
-  "versionId": "d9b062da-ea35-4104-94e3-7c4446177e37",
+  "versionId": "0eb5760e-87db-4374-8601-cd293db5f3c4",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "08a17d2ffdb586b840ec52dedb22b9c39b7a4b965cbde88862926fcc30465257"
