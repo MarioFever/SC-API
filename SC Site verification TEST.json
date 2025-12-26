@@ -1,50 +1,15 @@
 {
-  "name": "SC Site verification PRODUCTION",
+  "name": "SC Site verification TEST",
   "nodes": [
-    {
-      "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "field": "minutes",
-              "minutesInterval": 15
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.3,
-      "position": [
-        -1392,
-        2272
-      ],
-      "id": "032007f5-4de8-4ce8-9892-21a57fdfef66",
-      "name": "Schedule Trigger"
-    },
-    {
-      "parameters": {
-        "content": "PRODCUCIÓN\nhttps://docs.google.com/spreadsheets/d/1spIp3sKzMTNowJojfMFbL6b3BUv3VLrys0jLESLbrFc/",
-        "height": 1616,
-        "width": 3872
-      },
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1648,
-        1008
-      ],
-      "id": "804d45c2-770e-4f04-9159-48a3043b66ec",
-      "name": "Sticky Note"
-    },
     {
       "parameters": {},
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
-        -1488,
-        1872
+        -1168,
+        272
       ],
-      "id": "264b5afc-7254-4363-8d48-38f8c91279ce",
+      "id": "09a2b48a-2893-4379-ad91-9d89bccd9967",
       "name": "When clicking ‘Execute workflow’",
       "notes": "Punto de entrada manual para iniciar el proceso de verificación de sitios."
     },
@@ -52,62 +17,60 @@
       "parameters": {
         "documentId": {
           "__rl": true,
-          "value": "https://docs.google.com/spreadsheets/d/1spIp3sKzMTNowJojfMFbL6b3BUv3VLrys0jLESLbrFc/",
+          "value": "https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/",
           "mode": "url"
         },
         "sheetName": {
           "__rl": true,
-          "value": 938773327,
+          "value": "gid=0",
           "mode": "list",
           "cachedResultName": "SC verify",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1spIp3sKzMTNowJojfMFbL6b3BUv3VLrys0jLESLbrFc/edit#gid=938773327"
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/edit#gid=0"
         },
         "options": {}
       },
-      "id": "dcbb9539-4afb-4834-a8c4-69004e5180d7",
+      "id": "9e02f9eb-52ba-41ce-9cfa-f9591f17dbc8",
       "name": "Read GSheet",
       "type": "n8n-nodes-base.googleSheets",
+      "notes": "Lee la hoja de cálculo 'SC verify'. Obtiene la lista de dominios pendientes de verificación o token.",
       "typeVersion": 4.5,
       "position": [
         -960,
-        1872
+        272
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "De03tFAsQcVzGsQY",
           "name": "SEO - Google sheet"
         }
-      },
-      "notes": "Lee la hoja de cálculo 'SC verify'. Obtiene la lista de dominios pendientes de verificación o token."
+      }
     },
     {
       "parameters": {
         "jsCode": "const items = $input.all();\nconst verifiedDomains = new Set();\n\n// Helper to check verification status across possible column names\nfunction checkVerified(json) {\n    // Check specific known columns first, then fallback to regex\n    if (json['Verified SC?'] === true || String(json['Verified SC?']).toUpperCase() === 'TRUE') return true;\n    if (json['Verified'] === true || String(json['Verified']).toUpperCase() === 'TRUE') return true;\n    if (json['SC Verified'] === true || String(json['SC Verified']).toUpperCase() === 'TRUE') return true;\n    if (json['verified'] === true || String(json['verified']).toUpperCase() === 'TRUE') return true;\n    \n    // Find any key that looks like \"verified\" or \"sc verified\"\n    const keys = Object.keys(json);\n    const verifiedKey = keys.find(k => k.match(/verified/i));\n    \n    if (verifiedKey) {\n        const val = json[verifiedKey];\n        if (val === true) return true;\n        if (typeof val === 'string') {\n             return val.toUpperCase() === 'TRUE' || val === '1' || val.toUpperCase() === 'YES';\n        }\n        if (typeof val === 'number') {\n            return val === 1;\n        }\n    }\n    return false;\n}\n\n// Pass 1: Collect verified domains to use for subdomain checking\nitems.forEach(item => {\n    const json = item.json;\n    if (json.Domain && checkVerified(json)) {\n        verifiedDomains.add(String(json.Domain).trim().toLowerCase());\n    }\n});\n\n// Pass 2: Determine Action for each row\nreturn items.map((item, index) => {\n    const json = item.json;\n    // Handle empty rows or missing domains gracefully\n    const domain = json.Domain ? String(json.Domain).trim().toLowerCase() : '';\n    \n    // Calculate Row Number (Assuming header is row 1, so index 0 is row 2)\n    const rowNumber = index + 2;\n\n    if (!domain) {\n        return {\n            json: {\n                ...json,\n                flow_action: 'ignore',\n                row_number_calc: rowNumber\n            }\n        };\n    }\n    \n    // FIX: Get Status from the correct column\n    // We check 'Status', then '0' (seen in screenshot), then lowercase 'status'\n    let status = '';\n    if (json['Status']) status = String(json['Status']).trim();\n    else if (json['0']) status = String(json['0']).trim();\n    else if (json['status']) status = String(json['status']).trim();\n\n    // Check for existing token (Column C)\n    // JSON mapping has space at end, header might not. Check both.\n    const txtRecord = json['TXT DNS Record'] || json['TXT DNS Record '];\n    const hasToken = !!(txtRecord && String(txtRecord).trim());\n    \n    const isVerified = checkVerified(json);\n\n    let flow_action = 'ignore';\n\n    if (isVerified) {\n        flow_action = 'ignore';\n    } else if (status === 'TXT Error' || status === 'TXT Requested') {\n        flow_action = 'ignore';\n    } else if (hasToken) {\n        // If we have a token, we check status to see if we should verify\n        if (status === 'TXT Created') {\n            flow_action = 'verify_site';\n        } else {\n            // Token exists but not ready to verify (e.g. 'TXT Requested' or manual)\n            flow_action = 'ignore';\n        }\n    } else {\n        // No token. \n        // Only generate if status is empty (clean slate)\n        if (!status) {\n            // New Domain (C & D empty).\n            // Sub-rule: Check if it is a subdomain of an already verified domain\n            let isSubdomainVerified = false;\n            for (const vDomain of verifiedDomains) {\n                if (domain.endsWith('.' + vDomain) || domain === vDomain) {\n                    isSubdomainVerified = true;\n                    break;\n                }\n            }\n            \n            if (isSubdomainVerified) {\n                flow_action = 'ignore';\n            } else {\n                flow_action = 'generate_token';\n            }\n        } else {\n            // Status has something but no token? \n            flow_action = 'ignore';\n        }\n    }\n    \n    // Safety Condition: Only generate tokens for rows >= 1106\n    if ((flow_action === 'generate_token' || flow_action === 'verify_site') && rowNumber < 1106) {\n        flow_action = 'ignore';\n    }\n    \n    return {\n        json: {\n            ...json,\n            flow_action: String(flow_action), \n            row_number_calc: rowNumber\n        }\n    };\n});"
       },
       "name": "Filtering Logic",
+      "notes": "Analiza cada fila para decidir qué hacer:\n1. Si ya está verificado -> Ignorar.\n2. Si no tiene token -> Generar token (Flujo 0).\n3. Si tiene token y TXT creado -> Verificar sitio (Flujo 1).\n4. Filtra filas antiguas y subdominios innecesarios.",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         -736,
-        1872
+        272
       ],
-      "id": "21a116be-9c0d-4e32-8ab0-a6ab4c3120f9",
-      "notes": "Analiza cada fila para decidir qué hacer:\n1. Si ya está verificado -> Ignorar.\n2. Si no tiene token -> Generar token (Flujo 0).\n3. Si tiene token y TXT creado -> Verificar sitio (Flujo 1).\n4. Filtra filas antiguas y subdominios innecesarios."
+      "id": "18a15449-9b22-445f-ac60-f6cc26ba7db9"
     },
     {
       "parameters": {
         "operation": "update",
         "documentId": {
           "__rl": true,
-          "value": "https://docs.google.com/spreadsheets/d/1spIp3sKzMTNowJojfMFbL6b3BUv3VLrys0jLESLbrFc/",
+          "value": "https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/",
           "mode": "url"
         },
         "sheetName": {
           "__rl": true,
-          "value": 938773327,
-          "mode": "list",
-          "cachedResultName": "SC verify",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1spIp3sKzMTNowJojfMFbL6b3BUv3VLrys0jLESLbrFc/edit#gid=938773327"
+          "value": "gid=0",
+          "mode": "id"
         },
         "columns": {
           "mappingMode": "defineBelow",
@@ -257,8 +220,8 @@
               "canBeUsedToMatch": true
             },
             {
-              "id": "Slack Message",
-              "displayName": "Slack Message",
+              "id": "Notes",
+              "displayName": "Notes",
               "required": false,
               "defaultMatch": false,
               "display": true,
@@ -266,8 +229,17 @@
               "canBeUsedToMatch": true
             },
             {
-              "id": "Notes",
-              "displayName": "Notes",
+              "id": "method",
+              "displayName": "method",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "token",
+              "displayName": "token",
               "required": false,
               "defaultMatch": false,
               "display": true,
@@ -292,20 +264,20 @@
         "options": {}
       },
       "name": "Sheet: Write Token",
+      "notes": "Guarda el token generado en la hoja de cálculo y actualiza el estado a 'TXT Requested'.",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        176,
-        1632
+        -64,
+        176
       ],
-      "id": "bc6e675f-7798-409b-bf7c-fc822efee654",
+      "id": "e01164c2-56ca-4943-8980-a6a25f8bd4ec",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "De03tFAsQcVzGsQY",
           "name": "SEO - Google sheet"
         }
-      },
-      "notes": "Guarda el token generado en la hoja de cálculo y actualiza el estado a 'TXT Requested'."
+      }
     },
     {
       "parameters": {
@@ -382,14 +354,14 @@
         "options": {}
       },
       "name": "Router",
+      "notes": "Dirige el flujo según la acción decidida:\n- Rama 1: 'generate_token' (Solicitar nuevo token).\n- Rama 2: 'verify_site' (Verificar TXT en GSC).\n- Rama 3: 'ignore' (No hacer nada).",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
       "position": [
         -512,
-        1856
+        256
       ],
-      "id": "5ddcd714-c0be-4731-bff2-d2fed58dd844",
-      "notes": "Dirige el flujo según la acción decidida:\n- Rama 1: 'generate_token' (Solicitar nuevo token).\n- Rama 2: 'verify_site' (Verificar TXT en GSC).\n- Rama 3: 'ignore' (No hacer nada)."
+      "id": "ffc76ace-fab1-4cae-bf83-fb015173ec4a"
     },
     {
       "parameters": {
@@ -417,20 +389,20 @@
         "options": {}
       },
       "name": "API: Get Token",
+      "notes": "Llama a la API de Google Site Verification para obtener un token DNS TXT para el dominio.",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        -48,
-        1632
+        -288,
+        176
       ],
-      "id": "358f7bd7-1bef-4e71-bb27-f9c0dee6a2bd",
+      "id": "a13563d2-386b-40f7-a19c-ab54d3866362",
       "credentials": {
         "googleOAuth2Api": {
           "id": "3x3nyVCVCCpkE0Lf",
           "name": "SEO - SC Site Verification"
         }
-      },
-      "notes": "Llama a la API de Google Site Verification para obtener un token DNS TXT para el dominio."
+      }
     },
     {
       "parameters": {
@@ -454,20 +426,20 @@
         "options": {}
       },
       "name": "API: Verify Site",
+      "notes": "Intenta verificar la propiedad del sitio en Google enviando el token DNS.",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        -64,
-        2288
+        -288,
+        368
       ],
-      "id": "b16dc7eb-d2bf-4c93-97b7-91e92357cb61",
+      "id": "beed113e-d34a-4be0-994d-9fc33bf7bbbe",
       "credentials": {
         "googleOAuth2Api": {
           "id": "3x3nyVCVCCpkE0Lf",
           "name": "SEO - SC Site Verification"
         }
-      },
-      "notes": "Intenta verificar la propiedad del sitio en Google enviando el token DNS."
+      }
     },
     {
       "parameters": {
@@ -484,40 +456,41 @@
         }
       },
       "name": "API: Add to GSC1",
+      "notes": "Añade el sitio verificado a Google Search Console (v3) para empezar a recolectar datos.",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        112,
-        2288
+        -112,
+        368
       ],
-      "id": "971e2cf7-88fc-4f04-a203-ff04016eeeb3",
+      "id": "bd3efbdb-af7c-4f55-9a36-3f51d93c32d1",
       "credentials": {
         "googleOAuth2Api": {
           "id": "5g0ppmHyHO8p2RyJ",
           "name": "SEO - SC API [WRITE]"
         }
-      },
-      "notes": "Añade el sitio verificado a Google Search Console (v3) para empezar a recolectar datos."
+      }
     },
     {
       "parameters": {
         "operation": "update",
         "documentId": {
           "__rl": true,
-          "value": "https://docs.google.com/spreadsheets/d/1spIp3sKzMTNowJojfMFbL6b3BUv3VLrys0jLESLbrFc/",
-          "mode": "url"
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/"
         },
         "sheetName": {
           "__rl": true,
-          "value": 938773327,
+          "value": "gid=0",
           "mode": "list",
           "cachedResultName": "SC verify",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1spIp3sKzMTNowJojfMFbL6b3BUv3VLrys0jLESLbrFc/edit#gid=938773327"
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/edit#gid=0"
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "Domain": "={{ $('Router').item.json.Domain }}",
+            "row_number": 0,
+            "Domain": "={{ $('API: Verify Site').item.json.site.identifier }}",
             "Verified SC?": "TRUE"
           },
           "matchingColumns": [
@@ -541,7 +514,8 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": true
+              "canBeUsedToMatch": true,
+              "removed": false
             },
             {
               "id": "TXT DNS Record ",
@@ -550,7 +524,8 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": true
+              "canBeUsedToMatch": true,
+              "removed": false
             },
             {
               "id": "Status",
@@ -559,7 +534,8 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": true
+              "canBeUsedToMatch": true,
+              "removed": false
             },
             {
               "id": "Verified SC?",
@@ -568,7 +544,8 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": true
+              "canBeUsedToMatch": true,
+              "removed": false
             },
             {
               "id": "API property",
@@ -577,7 +554,8 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": true
+              "canBeUsedToMatch": true,
+              "removed": false
             },
             {
               "id": "API connector",
@@ -586,7 +564,8 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": true
+              "canBeUsedToMatch": true,
+              "removed": false
             },
             {
               "id": "Analytics ID",
@@ -595,7 +574,8 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": true
+              "canBeUsedToMatch": true,
+              "removed": false
             },
             {
               "id": "View_id",
@@ -604,7 +584,8 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": true
+              "canBeUsedToMatch": true,
+              "removed": false
             },
             {
               "id": "Domain Name",
@@ -613,7 +594,8 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": true
+              "canBeUsedToMatch": true,
+              "removed": false
             },
             {
               "id": "Date Created",
@@ -622,7 +604,8 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": true
+              "canBeUsedToMatch": true,
+              "removed": false
             },
             {
               "id": "Property_id",
@@ -631,7 +614,8 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": true
+              "canBeUsedToMatch": true,
+              "removed": false
             },
             {
               "id": "Biq Query Dataset Name",
@@ -640,7 +624,8 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": true
+              "canBeUsedToMatch": true,
+              "removed": false
             },
             {
               "id": "Big Query Connected",
@@ -649,7 +634,8 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": true
+              "canBeUsedToMatch": true,
+              "removed": false
             },
             {
               "id": "Owner",
@@ -658,16 +644,8 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "Slack Message",
-              "displayName": "Slack Message",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
+              "canBeUsedToMatch": true,
+              "removed": false
             },
             {
               "id": "Notes",
@@ -676,7 +654,28 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": true
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "method",
+              "displayName": "method",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "token",
+              "displayName": "token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
             },
             {
               "id": "row_number",
@@ -687,7 +686,7 @@
               "type": "number",
               "canBeUsedToMatch": true,
               "readOnly": true,
-              "removed": true
+              "removed": false
             }
           ],
           "attemptToConvertTypes": false,
@@ -696,63 +695,65 @@
         "options": {}
       },
       "name": "Sheet: Mark Verified",
+      "notes": "Actualiza la hoja de cálculo marcando el dominio como 'Verified SC? = TRUE'.",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        304,
-        2288
+        80,
+        368
       ],
-      "id": "dc46e888-76e1-41c7-a677-a1d09f47f46f",
+      "id": "e3faa7ae-f741-40a0-b566-40592590c90d",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "De03tFAsQcVzGsQY",
           "name": "SEO - Google sheet"
         }
-      },
-      "notes": "Actualiza la hoja de cálculo marcando el dominio como 'Verified SC? = TRUE'."
+      }
     },
     {
       "parameters": {
         "select": "channel",
         "channelId": {
           "__rl": true,
-          "value": "C0A5NH534E6",
+          "value": "C0A532BGEQJ",
           "mode": "id"
         },
         "text": "={{ \"🚀 *New Verification Request by* <@\" + $('Slack: Find User').item.json.user.id + \">\\n\\n🌐 *Domain:* \" + $('Router').item.json.Domain + \"\\n📝 *Status:* TXT Requested (Token generated)\\n⏳ *Action:* When SYS adds the TXT record to the domain, I will notify you.\" }}",
-        "otherOptions": {}
+        "otherOptions": {
+          "unfurlLinks": false
+        }
       },
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.3,
       "position": [
-        784,
-        1632
+        544,
+        176
       ],
-      "id": "f7c02415-c0d9-4692-90ee-d226b900ee2b",
+      "id": "b46f0604-e656-4b0d-b8af-56a7d068c035",
       "name": "Slack: Token Generated1",
+      "notes": "Envía notificación a Slack avisando que se ha generado un token y se requiere acción de Sistemas.",
       "webhookId": "29807620-4e35-4120-8a38-083eb4db8466",
       "credentials": {
         "slackApi": {
           "id": "pm4aWiFcFad05UGN",
           "name": "SEO -  Slack SEO Agent"
         }
-      },
-      "notes": "Envía notificación a Slack avisando que se ha generado un token y se requiere acción de Sistemas."
+      }
     },
     {
       "parameters": {
         "operation": "update",
         "documentId": {
           "__rl": true,
-          "value": "https://docs.google.com/spreadsheets/d/1spIp3sKzMTNowJojfMFbL6b3BUv3VLrys0jLESLbrFc/",
+          "value": "https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/",
           "mode": "url"
         },
         "sheetName": {
           "__rl": true,
-          "value": 938773327,
+          "value": "gid=0",
           "mode": "list",
           "cachedResultName": "SC verify",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1spIp3sKzMTNowJojfMFbL6b3BUv3VLrys0jLESLbrFc/edit#gid=938773327"
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/edit#gid=0"
         },
         "columns": {
           "mappingMode": "defineBelow",
@@ -791,20 +792,20 @@
         "options": {}
       },
       "name": "Sheet: Save Slack TS",
+      "notes": "Guarda el Timestamp del mensaje de Slack en la hoja como un hipervínculo. Esto permite responder en hilo después.",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        1008,
-        1632
+        768,
+        176
       ],
-      "id": "f447c200-7d61-41f9-a8ba-81b4cfcb7b56",
+      "id": "sheet-save-slack-ts",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "De03tFAsQcVzGsQY",
           "name": "SEO - Google sheet"
         }
-      },
-      "notes": "Guarda el Timestamp del mensaje de Slack en la hoja como un hipervínculo. Esto permite responder en hilo después."
+      }
     },
     {
       "parameters": {
@@ -817,7 +818,7 @@
           "parameters": [
             {
               "name": "channel",
-              "value": "C0A5NH534E6"
+              "value": "C0A532BGEQJ"
             },
             {
               "name": "text",
@@ -842,10 +843,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        768,
-        2288
+        544,
+        368
       ],
-      "id": "2edf55b7-4bae-4c42-954d-5a3e854b832f",
+      "id": "f4d432e5-794c-4bbe-843d-77adaeb7fcd7",
       "name": "Slack: Site Verified1",
       "webhookId": "61aec011-6289-4b39-93b2-af95a220fdcf",
       "credentials": {
@@ -872,20 +873,20 @@
         "options": {}
       },
       "name": "Slack: Find User",
+      "notes": "Busca el ID de usuario de Slack basado en el email del 'Owner' definido en la hoja.",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        448,
-        1632
+        208,
+        176
       ],
-      "id": "ef000059-6aa3-4a56-b428-5ecdec231f07",
+      "id": "b87a51e0-e455-456d-b800-554b95798c38",
       "credentials": {
         "slackApi": {
           "id": "pm4aWiFcFad05UGN",
           "name": "SEO -  Slack SEO Agent"
         }
-      },
-      "notes": "Busca el ID de usuario de Slack basado en el email del 'Owner' definido en la hoja."
+      }
     },
     {
       "parameters": {
@@ -904,119 +905,121 @@
         "options": {}
       },
       "name": "Slack: Find User1",
+      "notes": "Busca nuevamente el usuario de Slack (para la rama de verificación) para notificarle.",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        528,
-        2288
+        304,
+        368
       ],
-      "id": "87110cb7-b7be-4549-ab20-8b8d017ae43c",
+      "id": "9d1fb66e-cd80-48c4-bee0-1c4e8bf0521c",
       "credentials": {
         "slackApi": {
           "id": "pm4aWiFcFad05UGN",
           "name": "SEO -  Slack SEO Agent"
         }
-      },
-      "notes": "Busca nuevamente el usuario de Slack (para la rama de verificación) para notificarle."
+      }
     },
     {
       "parameters": {
         "content": "## 📋 PASO 1: Lectura de Datos\n\n**Read GSheet**\nLee la hoja 'SC verify' con todos los dominios y sus estados actuales (token, status, verificación).",
         "height": 150,
-        "width": 350
+        "width": 320,
+        "color": 1
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -1248,
-        1440
+        -1000,
+        50
       ],
-      "id": "d243b14e-5a58-43cf-925a-8331078c8a10",
+      "id": "sticky-note-read",
       "name": "Note: Read Sheet"
     },
     {
       "parameters": {
         "content": "## 🔍 PASO 2: Análisis y Decisión\n\n**Filtering Logic**\nAnaliza cada dominio y decide:\n• ✅ Ya verificado → Ignorar\n• 🆕 Sin token → Generar token\n• 📝 Token + TXT creado → Verificar\n• 🚫 Subdominio verificado → Ignorar",
         "height": 220,
-        "width": 380,
+        "width": 340,
         "color": 4
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -880,
-        1440
+        -750,
+        50
       ],
-      "id": "c9bd474d-d068-4a7c-9ee4-5a92a38382cf",
+      "id": "sticky-note-logic",
       "name": "Note: Filtering Logic"
     },
     {
       "parameters": {
         "content": "## 🚦 PASO 3: Router\n\n**Router**\nDivide el flujo en 3 ramas según la acción:\n1️⃣ generate_token\n2️⃣ verify_site\n3️⃣ ignore",
-        "width": 300,
+        "height": 160,
+        "width": 280,
         "color": 5
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -496,
-        1456
+        -540,
+        50
       ],
-      "id": "ec0e66d5-920f-4d89-bc6d-e8c3f4a5ffd2",
+      "id": "sticky-note-router",
       "name": "Note: Router"
     },
     {
       "parameters": {
         "content": "## 🔑 FLUJO 0: Generar Token\n\n**Pasos:**\n1. **API: Get Token** - Solicita token DNS TXT a Google\n2. **Sheet: Write Token** - Guarda token y estado 'TXT Requested'\n3. **Slack: Find User** - Busca usuario por email\n4. **Slack: Token Generated1** - Notifica en Slack\n5. **Sheet: Save Slack TS** - Guarda TS del mensaje para hilos",
         "height": 280,
-        "width": 400,
+        "width": 380,
         "color": 3
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -96,
-        1328
+        -320,
+        20
       ],
-      "id": "710a3fd5-cc10-45f7-a7ba-80b7d368b5e2",
+      "id": "sticky-note-flow0",
       "name": "Note: Flow 0 - Generate Token"
     },
     {
       "parameters": {
         "content": "## ✅ FLUJO 1: Verificar Sitio\n\n**Pasos:**\n1. **API: Verify Site** - Verifica que el TXT existe en DNS\n2. **API: Add to GSC1** - Añade sitio a Search Console\n3. **Sheet: Mark Verified** - Marca como 'Verified SC? = TRUE'\n4. **Slack: Find User1** - Busca usuario para mencionar\n5. **Slack: Site Verified1** - Responde en HILO confirmando",
         "height": 280,
-        "width": 400,
+        "width": 380,
         "color": 2
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -160,
-        1968
+        -320,
+        300
       ],
-      "id": "0ac51b57-de37-4a2b-abf4-64fb89eee868",
+      "id": "sticky-note-flow1",
       "name": "Note: Flow 1 - Verify Site"
     },
     {
       "parameters": {
         "content": "## 💬 Integración con Slack\n\n**Características:**\n• Notificaciones automáticas por dominio\n• Mensajes en hilo para mantener contexto\n• Hipervínculo al mensaje original en la hoja\n• Sin previews de URLs para mensajes limpios",
         "height": 200,
-        "width": 350,
+        "width": 320,
         "color": 6
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        784,
-        1376
+        800,
+        200
       ],
-      "id": "034408cf-ddb1-433e-934c-d8b2b3344c20",
+      "id": "sticky-note-slack",
       "name": "Note: Slack Integration"
     }
   ],
   "pinData": {},
   "connections": {
-    "Schedule Trigger": {
+    "When clicking ‘Execute workflow’": {
       "main": [
         [
           {
@@ -1025,11 +1028,6 @@
             "index": 0
           }
         ]
-      ]
-    },
-    "When clicking ‘Execute workflow’": {
-      "main": [
-        []
       ]
     },
     "Read GSheet": {
@@ -1048,17 +1046,6 @@
         [
           {
             "node": "Router",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Sheet: Write Token": {
-      "main": [
-        [
-          {
-            "node": "Slack: Find User",
             "type": "main",
             "index": 0
           }
@@ -1088,6 +1075,39 @@
         [
           {
             "node": "Sheet: Write Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sheet: Write Token": {
+      "main": [
+        [
+          {
+            "node": "Slack: Find User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack: Find User": {
+      "main": [
+        [
+          {
+            "node": "Slack: Token Generated1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack: Token Generated1": {
+      "main": [
+        [
+          {
+            "node": "Sheet: Save Slack TS",
             "type": "main",
             "index": 0
           }
@@ -1127,28 +1147,6 @@
         ]
       ]
     },
-    "Slack: Token Generated1": {
-      "main": [
-        [
-          {
-            "node": "Sheet: Save Slack TS",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Slack: Find User": {
-      "main": [
-        [
-          {
-            "node": "Slack: Token Generated1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Slack: Find User1": {
       "main": [
         [
@@ -1161,17 +1159,24 @@
       ]
     }
   },
-  "active": true,
+  "active": false,
   "settings": {
     "executionOrder": "v1",
     "callerPolicy": "workflowsFromSameOwner",
     "availableInMCP": false
   },
-  "versionId": "45084c1f-8b02-4590-a597-73087228c895",
+  "versionId": "41322142-e98c-42e6-b7c0-e9f0ccaf7e47",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "08a17d2ffdb586b840ec52dedb22b9c39b7a4b965cbde88862926fcc30465257"
   },
-  "id": "BSaO0p7YLRqRKDxS",
-  "tags": []
+  "id": "K7D8PDk5gkII5En4",
+  "tags": [
+    {
+      "updatedAt": "2025-09-26T14:13:03.261Z",
+      "createdAt": "2025-09-26T14:13:03.261Z",
+      "id": "M9pK35tC5ht2wdX3",
+      "name": "SEO"
+    }
+  ]
 }
