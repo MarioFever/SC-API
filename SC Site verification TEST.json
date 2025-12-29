@@ -718,7 +718,7 @@
           "value": "C0A532BGEQJ",
           "mode": "id"
         },
-        "text": "={{ \"🚀 *New Verification Request by* <@\" + $('Slack: Find User').item.json.user.id + \">\\n\\n🌐 *Domain:* \" + $('Router').item.json.Domain + \"\\n📝 *Status:* TXT Requested (Token generated)\\n⏳ *Action:* When SYS adds the TXT record to the domain, I will notify you.\" }}",
+        "text": "={{ \"🚀 *New Verification Request by* <@\" + $('Slack: Find User').item.json.user.id + \">\\n\\n🌐 *Domain:* \" + $('Router').item.json.Domain + \"\\n📝 *Status:* <https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/edit#gid=0&range=A\" + $('Router').item.json.row_number_calc + \"|TXT Requested (Token generated)>\\n⏳ *Action:* When SYS adds the TXT record to the domain, I will notify you.\" }}",
         "otherOptions": {
           "unfurlLinks": false
         }

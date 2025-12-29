@@ -719,7 +719,7 @@
           "value": "C0A5NH534E6",
           "mode": "id"
         },
-        "text": "={{ \"🚀 *New Verification Request by* <@\" + $('Slack: Find User').item.json.user.id + \">\\n\\n🌐 *Domain:* \" + $('Router').item.json.Domain + \"\\n📝 *Status:* TXT Requested (Token generated)\\n⏳ *Action:* When SYS adds the TXT record to the domain, I will notify you.\" }}",
+        "text": "={{ \"🚀 *New Verification Request by* <@\" + $('Slack: Find User').item.json.user.id + \">\\n\\n🌐 *Domain:* \" + $('Router').item.json.Domain + \"\\n📝 *Status:* <https://docs.google.com/spreadsheets/d/1spIp3sKzMTNowJojfMFbL6b3BUv3VLrys0jLESLbrFc/edit#gid=938773327&range=A\" + $('Router').item.json.row_number_calc + \"|TXT Requested (Token generated)>\\n⏳ *Action:* When SYS adds the TXT record to the domain, I will notify you.\" }}",
         "otherOptions": {}
       },
       "type": "n8n-nodes-base.slack",
