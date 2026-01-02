@@ -718,7 +718,7 @@
           "value": "C0A532BGEQJ",
           "mode": "id"
         },
-        "text": "={{ \"🚀 *New Verification Request by* <@\" + $('Slack: Find User').item.json.user.id + \">\\n\\n🌐 *Domain:* \" + $('Router').item.json.Domain + \"\\n📝 *Status:* <https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/edit#gid=0&range=A\" + $('Router').item.json.row_number_calc + \"|TXT Requested (Token generated)>\\n⏳ *Action:* When SYS adds the TXT record to the domain, I will notify you.\" }}",
+        "text": "={{ (() => { const userLookup = $('Slack: Find User').item.json; const userMention = (userLookup && userLookup.ok && userLookup.user && userLookup.user.id) ? ' <@' + userLookup.user.id + '>' : ''; return \"🚀 *New Verification Request\" + (userMention ? \" by*\" + userMention : \"*\") + \"\\n\\n🌐 *Domain:* \" + $('Router').item.json.Domain + \"\\n📝 *Status:* <https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/edit#gid=0&range=A\" + $('Router').item.json.row_number_calc + \"|TXT Requested (Token generated)>\\n⏳ *Action:* When SYS adds the TXT record to the domain, I will notify you.\"; })() }}",
         "otherOptions": {
           "unfurlLinks": false
         }
@@ -822,7 +822,7 @@
             },
             {
               "name": "text",
-              "value": "={{ \"✅ *Domain Verified!* <@\" + $('Slack: Find User1').item.json.user.id + \">\\n\\n🌐 *Domain:* \" + $('Router').item.json.Domain + \"\\n📊 *Status:* Added to Search Console\\n👉 *Next step:* <\" + \"https://search.google.com/u/1/search-console/settings/bulk-data-export?resource_id=sc-domain:\" + $('Router').item.json.Domain + \"|Go now and configure BQ connection>\\n    ◦ Cloud Project ID: `bigquery-dwh-integration`\\n    ◦ Dataset name: `\" + $('Router').item.json.Domain.replace(/[.-]/g, '_') + \"`\\n    ◦ Dataset location: Belgium (europe-west1)\" }}"
+              "value": "={{ (() => { const userLookup = $('Slack: Find User1').item.json; const userMention = (userLookup && userLookup.ok && userLookup.user && userLookup.user.id) ? ' <@' + userLookup.user.id + '>' : ''; return \"✅ *Domain Verified!*\" + userMention + \"\\n\\n🌐 *Domain:* \" + $('Router').item.json.Domain + \"\\n📊 *Status:* Added to Search Console\\n👉 *Next step:* <\" + \"https://search.google.com/u/1/search-console/settings/bulk-data-export?resource_id=sc-domain:\" + $('Router').item.json.Domain + \"|Go now and configure BQ connection>\\n    ◦ Cloud Project ID: `bigquery-dwh-integration`\\n    ◦ Dataset name: `\" + $('Router').item.json.Domain.replace(/[.-]/g, '_') + \"`\\n    ◦ Dataset location: Belgium (europe-west1)\"; })() }}"
             },
             {
               "name": "thread_ts",
@@ -870,10 +870,12 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "continueOnFail": true
+        }
       },
       "name": "Slack: Find User",
-      "notes": "Busca el ID de usuario de Slack basado en el email del 'Owner' definido en la hoja.",
+      "notes": "Busca el ID de usuario de Slack basado en el email del 'Owner' definido en la hoja. Continúa aunque no encuentre el usuario.",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
@@ -902,10 +904,12 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "continueOnFail": true
+        }
       },
       "name": "Slack: Find User1",
-      "notes": "Busca nuevamente el usuario de Slack (para la rama de verificación) para notificarle.",
+      "notes": "Busca nuevamente el usuario de Slack (para la rama de verificación) para notificarle. Continúa aunque no encuentre el usuario.",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
