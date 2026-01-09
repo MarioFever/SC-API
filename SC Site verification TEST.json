@@ -6,10 +6,10 @@
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
-        -1168,
-        272
+        -976,
+        160
       ],
-      "id": "09a2b48a-2893-4379-ad91-9d89bccd9967",
+      "id": "cfa07dd9-ac53-427f-853c-167bce634320",
       "name": "When clicking ‘Execute workflow’",
       "notes": "Punto de entrada manual para iniciar el proceso de verificación de sitios."
     },
@@ -29,35 +29,35 @@
         },
         "options": {}
       },
-      "id": "9e02f9eb-52ba-41ce-9cfa-f9591f17dbc8",
+      "id": "2d1c3379-dfca-40fd-befc-430193f127f0",
       "name": "Read GSheet",
       "type": "n8n-nodes-base.googleSheets",
-      "notes": "Lee la hoja de cálculo 'SC verify'. Obtiene la lista de dominios pendientes de verificación o token.",
       "typeVersion": 4.5,
       "position": [
-        -960,
-        272
+        -768,
+        160
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "De03tFAsQcVzGsQY",
           "name": "SEO - Google sheet"
         }
-      }
+      },
+      "notes": "Lee la hoja de cálculo 'SC verify'. Obtiene la lista de dominios pendientes de verificación o token."
     },
     {
       "parameters": {
         "jsCode": "const items = $input.all();\nconst verifiedDomains = new Set();\n\n// Helper to check verification status across possible column names\nfunction checkVerified(json) {\n    // Check specific known columns first, then fallback to regex\n    if (json['Verified SC?'] === true || String(json['Verified SC?']).toUpperCase() === 'TRUE') return true;\n    if (json['Verified'] === true || String(json['Verified']).toUpperCase() === 'TRUE') return true;\n    if (json['SC Verified'] === true || String(json['SC Verified']).toUpperCase() === 'TRUE') return true;\n    if (json['verified'] === true || String(json['verified']).toUpperCase() === 'TRUE') return true;\n    \n    // Find any key that looks like \"verified\" or \"sc verified\"\n    const keys = Object.keys(json);\n    const verifiedKey = keys.find(k => k.match(/verified/i));\n    \n    if (verifiedKey) {\n        const val = json[verifiedKey];\n        if (val === true) return true;\n        if (typeof val === 'string') {\n             return val.toUpperCase() === 'TRUE' || val === '1' || val.toUpperCase() === 'YES';\n        }\n        if (typeof val === 'number') {\n            return val === 1;\n        }\n    }\n    return false;\n}\n\n// Pass 1: Collect verified domains to use for subdomain checking\nitems.forEach(item => {\n    const json = item.json;\n    if (json.Domain && checkVerified(json)) {\n        verifiedDomains.add(String(json.Domain).trim().toLowerCase());\n    }\n});\n\n// Pass 2: Determine Action for each row\nreturn items.map((item, index) => {\n    const json = item.json;\n    // Handle empty rows or missing domains gracefully\n    const domain = json.Domain ? String(json.Domain).trim().toLowerCase() : '';\n    \n    // Calculate Row Number (Assuming header is row 1, so index 0 is row 2)\n    const rowNumber = index + 2;\n\n    if (!domain) {\n        return {\n            json: {\n                ...json,\n                flow_action: 'ignore',\n                row_number_calc: rowNumber\n            }\n        };\n    }\n    \n    // FIX: Get Status from the correct column\n    // We check 'Status', then '0' (seen in screenshot), then lowercase 'status'\n    let status = '';\n    if (json['Status']) status = String(json['Status']).trim();\n    else if (json['0']) status = String(json['0']).trim();\n    else if (json['status']) status = String(json['status']).trim();\n\n    // Check for existing token (Column C)\n    // JSON mapping has space at end, header might not. Check both.\n    const txtRecord = json['TXT DNS Record'] || json['TXT DNS Record '];\n    const hasToken = !!(txtRecord && String(txtRecord).trim());\n    \n    const isVerified = checkVerified(json);\n\n    let flow_action = 'ignore';\n\n    if (isVerified) {\n        flow_action = 'ignore';\n    } else if (status === 'TXT Error' || status === 'TXT Requested') {\n        flow_action = 'ignore';\n    } else if (hasToken) {\n        // If we have a token, we check status to see if we should verify\n        if (status === 'TXT Created') {\n            flow_action = 'verify_site';\n        } else {\n            // Token exists but not ready to verify (e.g. 'TXT Requested' or manual)\n            flow_action = 'ignore';\n        }\n    } else {\n        // No token. \n        // Only generate if status is empty (clean slate)\n        if (!status) {\n            // New Domain (C & D empty).\n            // Sub-rule: Check if it is a subdomain of an already verified domain\n            let isSubdomainVerified = false;\n            for (const vDomain of verifiedDomains) {\n                if (domain.endsWith('.' + vDomain) || domain === vDomain) {\n                    isSubdomainVerified = true;\n                    break;\n                }\n            }\n            \n            if (isSubdomainVerified) {\n                flow_action = 'ignore';\n            } else {\n                flow_action = 'generate_token';\n            }\n        } else {\n            // Status has something but no token? \n            flow_action = 'ignore';\n        }\n    }\n    \n    // Safety Condition: Only generate tokens for rows >= 1106\n    if ((flow_action === 'generate_token' || flow_action === 'verify_site') && rowNumber < 1106) {\n        flow_action = 'ignore';\n    }\n    \n    return {\n        json: {\n            ...json,\n            flow_action: String(flow_action), \n            row_number_calc: rowNumber\n        }\n    };\n});"
       },
       "name": "Filtering Logic",
-      "notes": "Analiza cada fila para decidir qué hacer:\n1. Si ya está verificado -> Ignorar.\n2. Si no tiene token -> Generar token (Flujo 0).\n3. Si tiene token y TXT creado -> Verificar sitio (Flujo 1).\n4. Filtra filas antiguas y subdominios innecesarios.",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -736,
-        272
+        -544,
+        160
       ],
-      "id": "18a15449-9b22-445f-ac60-f6cc26ba7db9"
+      "id": "f83678e2-68a9-4eb9-9228-cfd62a69ebc1",
+      "notes": "Analiza cada fila para decidir qué hacer:\n1. Si ya está verificado -> Ignorar.\n2. Si no tiene token -> Generar token (Flujo 0).\n3. Si tiene token y TXT creado -> Verificar sitio (Flujo 1).\n4. Filtra filas antiguas y subdominios innecesarios."
     },
     {
       "parameters": {
@@ -264,20 +264,20 @@
         "options": {}
       },
       "name": "Sheet: Write Token",
-      "notes": "Guarda el token generado en la hoja de cálculo y actualiza el estado a 'TXT Requested'.",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        -64,
-        176
+        128,
+        64
       ],
-      "id": "e01164c2-56ca-4943-8980-a6a25f8bd4ec",
+      "id": "e6033e69-352c-436a-b3a3-8665e77c13e8",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "De03tFAsQcVzGsQY",
           "name": "SEO - Google sheet"
         }
-      }
+      },
+      "notes": "Guarda el token generado en la hoja de cálculo y actualiza el estado a 'TXT Requested'."
     },
     {
       "parameters": {
@@ -354,14 +354,14 @@
         "options": {}
       },
       "name": "Router",
-      "notes": "Dirige el flujo según la acción decidida:\n- Rama 1: 'generate_token' (Solicitar nuevo token).\n- Rama 2: 'verify_site' (Verificar TXT en GSC).\n- Rama 3: 'ignore' (No hacer nada).",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
       "position": [
-        -512,
-        256
+        -320,
+        144
       ],
-      "id": "ffc76ace-fab1-4cae-bf83-fb015173ec4a"
+      "id": "7dd0486c-7f98-48f3-987f-4e9c314754ec",
+      "notes": "Dirige el flujo según la acción decidida:\n- Rama 1: 'generate_token' (Solicitar nuevo token).\n- Rama 2: 'verify_site' (Verificar TXT en GSC).\n- Rama 3: 'ignore' (No hacer nada)."
     },
     {
       "parameters": {
@@ -389,20 +389,20 @@
         "options": {}
       },
       "name": "API: Get Token",
-      "notes": "Llama a la API de Google Site Verification para obtener un token DNS TXT para el dominio.",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        -288,
-        176
+        -96,
+        64
       ],
-      "id": "a13563d2-386b-40f7-a19c-ab54d3866362",
+      "id": "c90bca79-0271-4108-8c4c-6d274a62fdbb",
       "credentials": {
         "googleOAuth2Api": {
           "id": "3x3nyVCVCCpkE0Lf",
           "name": "SEO - SC Site Verification"
         }
-      }
+      },
+      "notes": "Llama a la API de Google Site Verification para obtener un token DNS TXT para el dominio."
     },
     {
       "parameters": {
@@ -426,20 +426,21 @@
         "options": {}
       },
       "name": "API: Verify Site",
-      "notes": "Intenta verificar la propiedad del sitio en Google enviando el token DNS.",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        -288,
-        368
+        -96,
+        432
       ],
-      "id": "beed113e-d34a-4be0-994d-9fc33bf7bbbe",
+      "id": "09321c2c-2ef6-4dcc-a43c-1314e9241103",
       "credentials": {
         "googleOAuth2Api": {
           "id": "3x3nyVCVCCpkE0Lf",
           "name": "SEO - SC Site Verification"
         }
-      }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Intenta verificar la propiedad del sitio en Google enviando el token DNS. Continúa si falla para no bloquear otros dominios."
     },
     {
       "parameters": {
@@ -456,20 +457,20 @@
         }
       },
       "name": "API: Add to GSC1",
-      "notes": "Añade el sitio verificado a Google Search Console (v3) para empezar a recolectar datos.",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        -112,
-        368
+        320,
+        384
       ],
-      "id": "bd3efbdb-af7c-4f55-9a36-3f51d93c32d1",
+      "id": "b44f4612-9b46-4cc1-b9a4-7915b2849082",
       "credentials": {
         "googleOAuth2Api": {
           "id": "5g0ppmHyHO8p2RyJ",
           "name": "SEO - SC API [WRITE]"
         }
-      }
+      },
+      "notes": "Añade el sitio verificado a Google Search Console (v3) para empezar a recolectar datos."
     },
     {
       "parameters": {
@@ -695,20 +696,20 @@
         "options": {}
       },
       "name": "Sheet: Mark Verified",
-      "notes": "Actualiza la hoja de cálculo marcando el dominio como 'Verified SC? = TRUE'.",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        80,
-        368
+        528,
+        384
       ],
-      "id": "e3faa7ae-f741-40a0-b566-40592590c90d",
+      "id": "5bc1e9f2-e2a2-4113-93a1-85869f159fc2",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "De03tFAsQcVzGsQY",
           "name": "SEO - Google sheet"
         }
-      }
+      },
+      "notes": "Actualiza la hoja de cálculo marcando el dominio como 'Verified SC? = TRUE'."
     },
     {
       "parameters": {
@@ -726,19 +727,19 @@
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.3,
       "position": [
-        544,
-        176
+        736,
+        64
       ],
-      "id": "b46f0604-e656-4b0d-b8af-56a7d068c035",
+      "id": "af38b8c2-83f8-4ebf-8112-69d22b1a8a47",
       "name": "Slack: Token Generated1",
-      "notes": "Envía notificación a Slack avisando que se ha generado un token y se requiere acción de Sistemas.",
       "webhookId": "29807620-4e35-4120-8a38-083eb4db8466",
       "credentials": {
         "slackApi": {
           "id": "pm4aWiFcFad05UGN",
           "name": "SEO -  Slack SEO Agent"
         }
-      }
+      },
+      "notes": "Envía notificación a Slack avisando que se ha generado un token y se requiere acción de Sistemas."
     },
     {
       "parameters": {
@@ -792,20 +793,20 @@
         "options": {}
       },
       "name": "Sheet: Save Slack TS",
-      "notes": "Guarda el Timestamp del mensaje de Slack en la hoja como un hipervínculo. Esto permite responder en hilo después.",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        768,
-        176
+        960,
+        64
       ],
-      "id": "sheet-save-slack-ts",
+      "id": "9a6f34f8-89f4-4fde-bc6b-52071bf2d928",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "De03tFAsQcVzGsQY",
           "name": "SEO - Google sheet"
         }
-      }
+      },
+      "notes": "Guarda el Timestamp del mensaje de Slack en la hoja como un hipervínculo. Esto permite responder en hilo después."
     },
     {
       "parameters": {
@@ -843,10 +844,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        544,
-        368
+        992,
+        384
       ],
-      "id": "f4d432e5-794c-4bbe-843d-77adaeb7fcd7",
+      "id": "ad65a229-e16e-49ef-907d-671e78f8ecfe",
       "name": "Slack: Site Verified1",
       "webhookId": "61aec011-6289-4b39-93b2-af95a220fdcf",
       "credentials": {
@@ -870,25 +871,23 @@
             }
           ]
         },
-        "options": {
-          "continueOnFail": true
-        }
+        "options": {}
       },
       "name": "Slack: Find User",
-      "notes": "Busca el ID de usuario de Slack basado en el email del 'Owner' definido en la hoja. Continúa aunque no encuentre el usuario.",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        208,
-        176
+        400,
+        64
       ],
-      "id": "b87a51e0-e455-456d-b800-554b95798c38",
+      "id": "b2e6d26a-2951-4bf3-9cae-aa314bf7e8e4",
       "credentials": {
         "slackApi": {
           "id": "pm4aWiFcFad05UGN",
           "name": "SEO -  Slack SEO Agent"
         }
-      }
+      },
+      "notes": "Busca el ID de usuario de Slack basado en el email del 'Owner' definido en la hoja. Continúa aunque no encuentre el usuario."
     },
     {
       "parameters": {
@@ -904,40 +903,185 @@
             }
           ]
         },
-        "options": {
-          "continueOnFail": true
-        }
+        "options": {}
       },
       "name": "Slack: Find User1",
-      "notes": "Busca nuevamente el usuario de Slack (para la rama de verificación) para notificarle. Continúa aunque no encuentre el usuario.",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        304,
-        368
+        752,
+        384
       ],
-      "id": "9d1fb66e-cd80-48c4-bee0-1c4e8bf0521c",
+      "id": "e2ce5d3b-afaa-4109-86f0-f54df7ab7696",
       "credentials": {
         "slackApi": {
           "id": "pm4aWiFcFad05UGN",
           "name": "SEO -  Slack SEO Agent"
         }
-      }
+      },
+      "notes": "Busca nuevamente el usuario de Slack (para la rama de verificación) para notificarle. Continúa aunque no encuentre el usuario."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "verify-success-check",
+              "leftValue": "={{ $json.site?.identifier }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        96,
+        432
+      ],
+      "id": "a31ff28c-01c0-4e1a-9b13-59a26d1e4cab",
+      "name": "If: Verify OK?",
+      "notes": "Verifica si la API devolvió site.identifier (éxito) o error. Si falla, va a la rama de error."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Domain": "={{ $('Router').item.json.Domain }}",
+            "Status": "TXT Error"
+          },
+          "matchingColumns": [
+            "Domain"
+          ],
+          "schema": [
+            {
+              "id": "Domain",
+              "displayName": "Domain",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "name": "Sheet: Mark Error",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        288,
+        704
+      ],
+      "id": "b3145aaa-dbff-4133-9510-0841e4bedf00",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "De03tFAsQcVzGsQY",
+          "name": "SEO - Google sheet"
+        }
+      },
+      "notes": "Marca el dominio como 'TXT Error' para evitar reintentos infinitos."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "C0A532BGEQJ"
+            },
+            {
+              "name": "text",
+              "value": "={{ \"⚠️ *Verification Failed*\\n\\n🌐 *Domain:* \" + $('Router').item.json.Domain + \"\\n❌ *Error:* \" + ($('API: Verify Site').item.json.error?.message || 'Token not found in DNS') + \"\\n💡 *Action:* Verify that the TXT record was correctly added to the domain's DNS.\" }}"
+            },
+            {
+              "name": "thread_ts",
+              "value": "={{ ($('Router').item.json[\"Slack Message\"] || '').toString().match(/[0-9]+\\.[0-9]+/) ? ($('Router').item.json[\"Slack Message\"] || '').toString().match(/[0-9]+\\.[0-9]+/)[0] : '' }}"
+            },
+            {
+              "name": "unfurl_links",
+              "value": "false"
+            },
+            {
+              "name": "unfurl_media",
+              "value": "false"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        576,
+        704
+      ],
+      "id": "4775d896-20fe-4bde-a89f-e699c3b287e0",
+      "name": "Slack: Verification Failed",
+      "credentials": {
+        "slackApi": {
+          "id": "pm4aWiFcFad05UGN",
+          "name": "SEO -  Slack SEO Agent"
+        }
+      },
+      "notes": "Notifica en Slack (en hilo) que la verificación falló para este dominio."
     },
     {
       "parameters": {
         "content": "## 📋 PASO 1: Lectura de Datos\n\n**Read GSheet**\nLee la hoja 'SC verify' con todos los dominios y sus estados actuales (token, status, verificación).",
         "height": 150,
-        "width": 320,
-        "color": 1
+        "width": 320
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -1000,
-        50
+        -1040,
+        -400
       ],
-      "id": "sticky-note-read",
+      "id": "c8060c48-3012-4dbf-8b54-2b3358a0c252",
       "name": "Note: Read Sheet"
     },
     {
@@ -950,26 +1094,25 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -750,
-        50
+        -672,
+        -400
       ],
-      "id": "sticky-note-logic",
+      "id": "33e05d32-3b60-4796-9f6a-0e7143566505",
       "name": "Note: Filtering Logic"
     },
     {
       "parameters": {
         "content": "## 🚦 PASO 3: Router\n\n**Router**\nDivide el flujo en 3 ramas según la acción:\n1️⃣ generate_token\n2️⃣ verify_site\n3️⃣ ignore",
-        "height": 160,
         "width": 280,
         "color": 5
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -540,
-        50
+        -240,
+        -400
       ],
-      "id": "sticky-note-router",
+      "id": "713b379d-f1dd-4289-932c-7184d788a8e2",
       "name": "Note: Router"
     },
     {
@@ -982,27 +1125,43 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -320,
-        20
+        144,
+        -400
       ],
-      "id": "sticky-note-flow0",
+      "id": "07382771-e40b-47e8-b93a-a0f36d6b2ac1",
       "name": "Note: Flow 0 - Generate Token"
     },
     {
       "parameters": {
-        "content": "## ✅ FLUJO 1: Verificar Sitio\n\n**Pasos:**\n1. **API: Verify Site** - Verifica que el TXT existe en DNS\n2. **API: Add to GSC1** - Añade sitio a Search Console\n3. **Sheet: Mark Verified** - Marca como 'Verified SC? = TRUE'\n4. **Slack: Find User1** - Busca usuario para mencionar\n5. **Slack: Site Verified1** - Responde en HILO confirmando",
-        "height": 280,
+        "content": "## ✅ FLUJO 1: Verificar Sitio\n\n**Pasos:**\n1. **API: Verify Site** - Intenta verificar TXT en DNS\n2. **If: Verify OK?** - Bifurca según éxito/error\n3. ✅ Éxito: Añade a GSC, marca verified, notifica\n4. ❌ Error: Marca 'TXT Error', notifica fallo",
+        "height": 220,
         "width": 380,
         "color": 2
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -320,
-        300
+        -400,
+        912
       ],
-      "id": "sticky-note-flow1",
+      "id": "eda10deb-a877-4295-a523-05b600c17ce0",
       "name": "Note: Flow 1 - Verify Site"
+    },
+    {
+      "parameters": {
+        "content": "## ❌ Rama de Error\n\n**Si la verificación falla:**\n• **Sheet: Mark Error** - Status = 'TXT Error'\n• **Slack: Verification Failed** - Notifica el error en hilo\n\nEl dominio no se reintentará hasta que se corrija manualmente.",
+        "height": 200,
+        "width": 340,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        320,
+        880
+      ],
+      "id": "389a17fc-7bd2-4d54-87f3-ce89379b35ea",
+      "name": "Note: Error Branch"
     },
     {
       "parameters": {
@@ -1014,11 +1173,27 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        800,
-        200
+        720,
+        -384
       ],
-      "id": "sticky-note-slack",
+      "id": "b73c562e-a84b-4c0e-9277-30445b8fefea",
       "name": "Note: Slack Integration"
+    },
+    {
+      "parameters": {
+        "content": "TEST\nhttps://docs.google.com/spreadsheets/d/1Je0mbUj3pqb_fHcxLJOePQtk3OL7pYGz_wQAxTC1y1w/",
+        "height": 2304,
+        "width": 4752,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2240,
+        -640
+      ],
+      "id": "c302e709-3482-4bea-90e7-ce4b64e7192c",
+      "name": "Sticky Note"
     }
   ],
   "pinData": {},
@@ -1122,7 +1297,36 @@
       "main": [
         [
           {
+            "node": "If: Verify OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Verify OK?": {
+      "main": [
+        [
+          {
             "node": "API: Add to GSC1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sheet: Mark Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sheet: Mark Error": {
+      "main": [
+        [
+          {
+            "node": "Slack: Verification Failed",
             "type": "main",
             "index": 0
           }
@@ -1169,7 +1373,7 @@
     "callerPolicy": "workflowsFromSameOwner",
     "availableInMCP": false
   },
-  "versionId": "41322142-e98c-42e6-b7c0-e9f0ccaf7e47",
+  "versionId": "43a3df33-7f9d-481f-b788-f3f210160a03",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "08a17d2ffdb586b840ec52dedb22b9c39b7a4b965cbde88862926fcc30465257"
